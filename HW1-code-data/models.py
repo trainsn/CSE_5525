@@ -40,6 +40,11 @@ class UnigramFeatureExtractor(FeatureExtractor):
         self.indexer = indexer
         self.corpus_length = len(indexer)
 
+        self.feats = []
+        for i, sentimentExample in enumerate(train_exs):
+            sentence = sentimentExample.words
+            self.feats.append(self.calculate_sentence_probability(sentence))
+
     def calculate_sentence_probability(self, sentence):
         col = [self.indexer.index_of(word.lower()) for word in sentence if self.indexer.contains(word.lower())]
         row = np.zeros(len(col), dtype=np.int)
@@ -61,11 +66,12 @@ class BigramFeatureExtractor(FeatureExtractor):
                         indexer.add_and_get_index((previous_word.lower(), word.lower()))
                 previous_word = word
         self.indexer = indexer
-        self.unique_bigram_words = len(indexer)
+        self.corpus_length = len(indexer)
 
-        # for sentimentExample in train_exs:
-        #     sentence = sentimentExample.words
-        #     self.calculate_sentence_probability(sentence)
+        self.feats = []
+        for i, sentimentExample in enumerate(train_exs):
+            sentence = sentimentExample.words
+            self.feats.append(self.calculate_sentence_probability(sentence))
 
     def calculate_sentence_probability(self, sentence):
         col = []
@@ -77,7 +83,7 @@ class BigramFeatureExtractor(FeatureExtractor):
             previous_word = word
         row = np.zeros(len(col), dtype=np.int)
         data = np.ones(len(col), dtype=np.int)
-        feat = csr_matrix((data, (row, col)), shape=(1, self.unique_bigram_words))
+        feat = csr_matrix((data, (row, col)), shape=(1, self.corpus_length))
         return feat
 
 class BetterFeatureExtractor(FeatureExtractor):
@@ -124,9 +130,13 @@ class LogisticRegressionClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
+    def __init__(self, feat_size, feat_extractor):
+        self.w = np.zeros(feat_size)
+        self.feat_extractor = feat_extractor
 
+    def predict(self, sentence):
+        feat = self.feat_extractor.calculate_sentence_probability(sentence)
+        return int(feat.dot(np.expand_dims(self.w, axis=1))[0, 0] > 0)
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
     """
@@ -137,7 +147,6 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     """
     raise Exception("Must be implemented")
 
-
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
     """
     Train a logistic regression model.
@@ -145,8 +154,26 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :param feat_extractor: feature extractor to use
     :return: trained LogisticRegressionClassifier model
     """
-    raise Exception("Must be implemented")
+    lr = LogisticRegressionClassifier(feat_extractor.corpus_length, feat_extractor)
+    alpha = 1e-1
+    for epoch in range(4):
+        loss = 0.
+        acc = 0
+        indices = np.arange(len(train_exs))
+        np.random.shuffle(indices)
+        for i in indices:
+            feat = feat_extractor.feats[i]
+            sentimentExample = train_exs[i]
+            y = sentimentExample.label
+            z = 1 / (1 + np.exp(-feat.dot(np.expand_dims(lr.w, axis=1))))[0, 0]
+            loss += -y * np.log(z) - (1 - y) * np.log(1 - z)
+            predict = int(feat.dot(np.expand_dims(lr.w, axis=1))[0, 0] > 0)
+            acc += (predict == y)
+            grad = (z - y) * feat.toarray()[0]
+            lr.w = lr.w - alpha * grad
+        print("epoch {:d}, loss: {:f}, accuracy: {:f}".format(epoch, loss / len(train_exs), acc / len(train_exs)))
 
+    return lr
 
 def train_model(args, train_exs: List[SentimentExample]) -> SentimentClassifier:
     """
