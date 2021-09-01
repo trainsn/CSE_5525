@@ -2,7 +2,10 @@
 
 from sentiment_data import *
 from utils import *
-
+import nltk
+from nltk.corpus import stopwords
+import numpy as np
+from scipy.sparse import csr_matrix
 
 class FeatureExtractor(object):
     """
@@ -27,9 +30,22 @@ class UnigramFeatureExtractor(FeatureExtractor):
     Extracts unigram bag-of-words features from a sentence. It's up to you to decide how you want to handle counts
     and any additional preprocessing you want to do.
     """
-    def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+    def __init__(self, indexer: Indexer, train_exs, stop_words):
+        for sentimentExample in train_exs:
+            words = sentimentExample.words
+            for word in words:
+                lowercase = word.lower()
+                if not lowercase in stop_words:
+                    indexer.add_and_get_index(lowercase)
+        self.indexer = indexer
+        self.corpus_length = len(indexer)
 
+    def calculate_sentence_probability(self, sentence):
+        col = [self.indexer.index_of(word.lower()) for word in sentence if self.indexer.contains(word.lower())]
+        row = np.zeros(len(col), dtype=np.int)
+        data = np.ones(len(col), dtype=np.int)
+        feat = csr_matrix((data, (row, col)), shape=(1, self.corpus_length))
+        return feat
 
 class BigramFeatureExtractor(FeatureExtractor):
     """
@@ -116,11 +132,13 @@ def train_model(args, train_exs: List[SentimentExample]) -> SentimentClassifier:
     :return: trained SentimentClassifier model, of whichever type is specified
     """
     # Initialize feature extractor
+    nltk.download('stopwords')
+    stop_words = set(stopwords.words('english'))
+
     if args.model == "TRIVIAL":
         feat_extractor = None
     elif args.feats == "UNIGRAM":
-        # Add additional preprocessing code here
-        feat_extractor = UnigramFeatureExtractor(Indexer())
+        feat_extractor = UnigramFeatureExtractor(Indexer(), train_exs, stop_words)
     elif args.feats == "BIGRAM":
         # Add additional preprocessing code here
         feat_extractor = BigramFeatureExtractor(Indexer())
