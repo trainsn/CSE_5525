@@ -51,9 +51,34 @@ class BigramFeatureExtractor(FeatureExtractor):
     """
     Bigram feature extractor analogous to the unigram one.
     """
-    def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+    def __init__(self, indexer: Indexer, train_exs, stop_words):
+        for sentimentExample in train_exs:
+            words = sentimentExample.words
+            previous_word = None
+            for word in words:
+                if previous_word is not None:
+                    if not (previous_word.lower() in stop_words and word.lower() in stop_words):
+                        indexer.add_and_get_index((previous_word.lower(), word.lower()))
+                previous_word = word
+        self.indexer = indexer
+        self.unique_bigram_words = len(indexer)
 
+        # for sentimentExample in train_exs:
+        #     sentence = sentimentExample.words
+        #     self.calculate_sentence_probability(sentence)
+
+    def calculate_sentence_probability(self, sentence):
+        col = []
+        previous_word = None
+        for word in sentence:
+            if previous_word is not None:
+                if self.indexer.contains((previous_word.lower(), word.lower())):
+                    col.append(self.indexer.index_of((previous_word.lower(), word.lower())))
+            previous_word = word
+        row = np.zeros(len(col), dtype=np.int)
+        data = np.ones(len(col), dtype=np.int)
+        feat = csr_matrix((data, (row, col)), shape=(1, self.unique_bigram_words))
+        return feat
 
 class BetterFeatureExtractor(FeatureExtractor):
     """
@@ -141,7 +166,7 @@ def train_model(args, train_exs: List[SentimentExample]) -> SentimentClassifier:
         feat_extractor = UnigramFeatureExtractor(Indexer(), train_exs, stop_words)
     elif args.feats == "BIGRAM":
         # Add additional preprocessing code here
-        feat_extractor = BigramFeatureExtractor(Indexer())
+        feat_extractor = BigramFeatureExtractor(Indexer(), train_exs, stop_words)
     elif args.feats == "BETTER":
         # Add additional preprocessing code here
         feat_extractor = BetterFeatureExtractor(Indexer())
