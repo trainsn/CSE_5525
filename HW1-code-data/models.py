@@ -50,6 +50,8 @@ class UnigramFeatureExtractor(FeatureExtractor):
         row = np.zeros(len(col), dtype=np.int)
         data = np.ones(len(col), dtype=np.int)
         feat = csr_matrix((data, (row, col)), shape=(1, self.corpus_length))
+        if len(col) > 0:
+            feat = feat * (1. / len(col))
         return feat
 
 class BigramFeatureExtractor(FeatureExtractor):
@@ -84,15 +86,58 @@ class BigramFeatureExtractor(FeatureExtractor):
         row = np.zeros(len(col), dtype=np.int)
         data = np.ones(len(col), dtype=np.int)
         feat = csr_matrix((data, (row, col)), shape=(1, self.corpus_length))
+        if len(col) > 0:
+            feat = feat * (1. / len(col))
         return feat
 
 class BetterFeatureExtractor(FeatureExtractor):
     """
     Better feature extractor...try whatever you can think of!
     """
-    def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+    def __init__(self, indexer: Indexer, train_exs, stop_words):
+        # unigram
+        for sentimentExample in train_exs:
+            words = sentimentExample.words
+            for word in words:
+                lowercase = word.lower()
+                if not lowercase in stop_words:
+                    indexer.add_and_get_index(lowercase)
 
+        # bigram
+        for sentimentExample in train_exs:
+            words = sentimentExample.words
+            previous_word = None
+            for word in words:
+                if previous_word is not None:
+                    if not (previous_word.lower() in stop_words and word.lower() in stop_words):
+                        indexer.add_and_get_index((previous_word.lower(), word.lower()))
+                previous_word = word
+
+        self.indexer = indexer
+        self.corpus_length = len(indexer)
+
+        self.feats = []
+        for i, sentimentExample in enumerate(train_exs):
+            sentence = sentimentExample.words
+            self.feats.append(self.calculate_sentence_probability(sentence))
+
+    def calculate_sentence_probability(self, sentence):
+        col = [self.indexer.index_of(word.lower()) for word in sentence if self.indexer.contains(word.lower())]
+        unigram_count = len(col)
+
+        previous_word = None
+        for word in sentence:
+            if previous_word is not None:
+                if self.indexer.contains((previous_word.lower(), word.lower())):
+                    col.append(self.indexer.index_of((previous_word.lower(), word.lower())))
+            previous_word = word
+        bigram_count = len(col) - unigram_count
+        row = np.zeros(len(col), dtype=np.int)
+        data = np.ones(len(col))
+        data[:unigram_count] = data[:unigram_count] * 1. / unigram_count
+        data[unigram_count:unigram_count + bigram_count] = data[unigram_count:unigram_count + bigram_count] * 1. / bigram_count
+        feat = csr_matrix((data, (row, col)), shape=(1, self.corpus_length))
+        return feat
 
 class SentimentClassifier(object):
     """
@@ -155,7 +200,8 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :return: trained LogisticRegressionClassifier model
     """
     lr = LogisticRegressionClassifier(feat_extractor.corpus_length, feat_extractor)
-    alpha = 1e-1
+    alpha = 1e1
+    # beta = 1e-4
     for epoch in range(4):
         loss = 0.
         acc = 0
@@ -166,10 +212,11 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
             sentimentExample = train_exs[i]
             y = sentimentExample.label
             z = 1 / (1 + np.exp(-feat.dot(np.expand_dims(lr.w, axis=1))))[0, 0]
-            loss += -y * np.log(z) - (1 - y) * np.log(1 - z)
+            loss += -y * np.log(z) - (1 - y) * np.log(1 - z) \
+                    # + beta * np.expand_dims(lr.w, axis=0).dot(np.expand_dims(lr.w, axis=1))[0, 0]
             predict = int(feat.dot(np.expand_dims(lr.w, axis=1))[0, 0] > 0)
             acc += (predict == y)
-            grad = (z - y) * feat.toarray()[0]
+            grad = (z - y) * feat.toarray()[0] # + 2 * beta * lr.w
             lr.w = lr.w - alpha * grad
         print("epoch {:d}, loss: {:f}, accuracy: {:f}".format(epoch, loss / len(train_exs), acc / len(train_exs)))
 
@@ -196,7 +243,7 @@ def train_model(args, train_exs: List[SentimentExample]) -> SentimentClassifier:
         feat_extractor = BigramFeatureExtractor(Indexer(), train_exs, stop_words)
     elif args.feats == "BETTER":
         # Add additional preprocessing code here
-        feat_extractor = BetterFeatureExtractor(Indexer())
+        feat_extractor = BetterFeatureExtractor(Indexer(), train_exs, stop_words)
     else:
         raise Exception("Pass in UNIGRAM, BIGRAM, or BETTER to run the appropriate system")
 
