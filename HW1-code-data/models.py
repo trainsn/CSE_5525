@@ -200,9 +200,9 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :return: trained LogisticRegressionClassifier model
     """
     lr = LogisticRegressionClassifier(feat_extractor.corpus_length, feat_extractor)
-    alpha = 1e1
+    alpha = 1e0
     # beta = 1e-4
-    for epoch in range(4):
+    for epoch in range(8):
         loss = 0.
         acc = 0
         indices = np.arange(len(train_exs))
@@ -219,6 +219,14 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
             grad = (z - y) * feat.toarray()[0] # + 2 * beta * lr.w
             lr.w = lr.w - alpha * grad
         print("epoch {:d}, loss: {:f}, accuracy: {:f}".format(epoch, loss / len(train_exs), acc / len(train_exs)))
+
+    for i in indices:
+        feat = feat_extractor.feats[i]
+        sentimentExample = train_exs[i]
+        y = sentimentExample.label
+        z = 1 / (1 + np.exp(-feat.dot(np.expand_dims(lr.w, axis=1))))[0, 0]
+        loss += -y * np.log(z) - (1 - y) * np.log(1 - z)
+    print("training loss: {:f}".format(loss / len(train_exs)))
 
     return lr
 
