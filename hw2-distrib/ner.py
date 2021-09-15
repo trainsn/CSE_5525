@@ -77,10 +77,10 @@ if __name__ == '__main__':
     train = read_data(args.train_path)
     dev = read_data(args.dev_path)
     # Here's a few sentences...
-    print("Examples of sentences:")
-    print(str(dev[1]))
-    print(str(dev[3]))
-    print(str(dev[5]))
+    # print("Examples of sentences:")
+    # print(str(dev[1]))
+    # print(str(dev[3]))
+    # print(str(dev[5]))
     system_to_run = args.model
     # If set to True, runs your CRF on the test set to produce final output
     # Train our model

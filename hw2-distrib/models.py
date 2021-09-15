@@ -95,8 +95,8 @@ def train_hmm_model(sentences: List[LabeledSentence]) -> HmmNerModel:
     # Count occurrences of initial tags, transitions, and emissions
     # Apply additive smoothing to avoid log(0) / infinities / etc.
     init_counts = np.ones((len(tag_indexer)), dtype=float) * 0.001
-    transition_counts = np.ones((len(tag_indexer),len(tag_indexer)), dtype=float) * 0.001
-    emission_counts = np.ones((len(tag_indexer),len(word_indexer)), dtype=float) * 0.001
+    transition_counts = np.ones((len(tag_indexer), len(tag_indexer)), dtype=float) * 0.001
+    emission_counts = np.ones((len(tag_indexer), len(word_indexer)), dtype=float) * 0.001
     for sentence in sentences:
         bio_tags = sentence.get_bio_tags()
         for i in range(0, len(sentence)):
@@ -109,7 +109,6 @@ def train_hmm_model(sentences: List[LabeledSentence]) -> HmmNerModel:
                 transition_counts[tag_indexer.add_and_get_index(bio_tags[i-1])][tag_idx] += 1.0
     # Turn counts into probabilities for initial tags, transitions, and emissions. All
     # probabilities are stored as log probabilities
-    print(repr(init_counts))
     init_counts = np.log(init_counts / init_counts.sum())
     # transitions are stored as count[prev state][next state], so we sum over the second axis
     # and normalize by that to get the right conditional probabilities
