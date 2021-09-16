@@ -66,8 +66,26 @@ class HmmNerModel(object):
         :param sentence_tokens: List of the tokens in the sentence to tag
         :return: The LabeledSentence consisting of predictions over the sentence
         """
-        raise Exception("IMPLEMENT ME")
+        v = self.init_log_probs + self.emission_log_probs[:, self.word_indexer.index_of(sentence_tokens[0].word)]   # [num_tags]
+        T = len(sentence_tokens)
+        N = len(self.tag_indexer)
+        bps = np.zeros((T-1, N), dtype=np.int)
+        for t in range(1, T):
+            v_old = v[:, np.newaxis]
+            tmp = v_old + self.transition_log_probs
+            word = sentence_tokens[t].word
+            word_idx = self.word_indexer.index_of(word) if self.word_indexer.contains(word) else self.word_indexer.index_of("UNK")
+            tmp = tmp + self.emission_log_probs[:, word_idx][np.newaxis, :]   # [num_tags, num_tags]
+            v = np.max(tmp, axis=0)
+            bps[t - 1] = np.argmax(tmp, axis=0)
 
+        pred_tags_idx = [np.argmax(v)]
+        for t in range(T-2, -1, -1):
+            last = pred_tags_idx[-1]
+            pred_tags_idx.append(bps[t, last])
+        pred_tags_idx.reverse()
+        pred_tags = [self.tag_indexer.get_object(idx) for idx in pred_tags_idx]
+        return LabeledSentence(sentence_tokens, chunks_from_bio_tag_seq(pred_tags))
 
 def train_hmm_model(sentences: List[LabeledSentence]) -> HmmNerModel:
     """
