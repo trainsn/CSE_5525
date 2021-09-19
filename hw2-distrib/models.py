@@ -8,6 +8,8 @@ from collections import Counter
 from typing import List
 
 import numpy as np
+from scipy.sparse import csr_matrix
+import pdb
 
 
 class ProbabilisticSequenceScorer(object):
@@ -177,15 +179,41 @@ def train_crf_model(sentences):
     print("Extracting features")
     feature_indexer = Indexer()
     # 4-d list indexed by sentence index, word index, tag index, feature index
-    feature_cache = [[[[] for k in range(0, len(tag_indexer))] for j in range(0, len(sentences[i]))] for i in range(0, len(sentences))]
-    for sentence_idx in range(0, len(sentences)):
+    feature_cache = \
+        [
+            [
+                [
+                    [] for k in range(0, len(tag_indexer))
+                ] for j in range(0, len(sentences[i]))
+            ] for i in range(0, len(sentences))
+        ]
+    # for sentence_idx in range(0, len(sentences)):
+    for sentence_idx in range(0, 2):
         if sentence_idx % 100 == 0:
             print("Ex %i/%i" % (sentence_idx, len(sentences)))
         for word_idx in range(0, len(sentences[sentence_idx])):
             for tag_idx in range(0, len(tag_indexer)):
-                feature_cache[sentence_idx][word_idx][tag_idx] = extract_emission_features(sentences[sentence_idx].tokens, word_idx, tag_indexer.get_object(tag_idx), feature_indexer, add_to_indexer=True)
+                feature_cache[sentence_idx][word_idx][tag_idx] = extract_emission_features(
+                    sentences[sentence_idx].tokens, word_idx, tag_indexer.get_object(tag_idx), feature_indexer, add_to_indexer=True)
+
     print("Training")
-    raise Exception("IMPLEMENT THE REST OF ME")
+    crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
+    for epoch in range(1):
+        sentence_indices = np.arange(2)
+        # np.random.shuffle(sentence_indices)
+        for sentence_idx in sentence_indices:
+            sentence = sentences[sentence_idx]
+            labels = sentence.get_bio_tags()
+            word_indices = np.arange(len(sentence))
+            # np.random.shuffle(word_indices)
+            for word_idx in word_indices:
+                tag = labels[word_idx]
+                tag_idx = tag_indexer.index_of(tag)
+                col = feature_cache[sentence_idx][word_idx][tag_idx]
+                row = np.zeros(len(col), dtype=np.int)
+                data = np.ones(len(col), dtype=np.int)
+                feat = csr_matrix((data, (row, col)), shape=(1, len(feature_indexer)))
+                phi = feat.dot(np.expand_dims(crf.feature_weights, axis=1))
 
 
 def extract_emission_features(sentence_tokens: List[Token], word_index: int, tag: str, feature_indexer: Indexer, add_to_indexer: bool):
