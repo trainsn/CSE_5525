@@ -10,6 +10,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
+from scipy.special import logsumexp
 import pdb
 
 
@@ -222,13 +223,13 @@ def train_crf_model(sentences):
                 data = np.ones(len(col), dtype=np.int)
                 feat = csr_matrix((data, (row, col)), shape=(1, len(feature_indexer)))
                 phi_e = feat.dot(np.expand_dims(crf.feature_weights, axis=1))
-                forward_backward(crf.feature_weights, feats_loc, len(feature_indexer), word_idx)
+                forward_backward(crf.feature_weights, feats_loc, len(feature_indexer), word_idx, phi_ts)
 
 def read_phi_ts(tag_indexer):
     df = pd.read_csv("transition.csv", index_col=0)
     return df.to_numpy()
 
-def forward_backward(feature_weights, feats_loc, feat_shape, time_length):
+def forward_backward(feature_weights, feats_loc, feat_shape, time_length, phi_ts):
     num_words = feats_loc.shape[0]
     num_tags = feats_loc.shape[1]
     num_feats = feats_loc.shape[2]
@@ -238,13 +239,15 @@ def forward_backward(feature_weights, feats_loc, feat_shape, time_length):
     feats = csr_matrix((data, (row, col)), shape=(num_words * num_tags, feat_shape))
     phi_es = feats.dot(np.expand_dims(feature_weights, axis=1)).reshape(num_words, num_tags)
 
-    alpha = np.zeros((time_length, num_tags))
-    alpha[0] = phi_es[0]
-    return
+    alpha = phi_es[0]
+    for i in range(1, time_length):
+        alpha_old = alpha[:, np.newaxis]  # [num_tags(from), 1]
+        tmp = alpha_old + phi_ts   # [num_tags(from), num_tags(to)]
+        tmp = logsumexp(tmp, axis=0)   # [num_tags(to)]
+        alpha = tmp + phi_es[i]     # [num_tags(to)]
+    alpha = logsumexp(alpha)
 
-
-
-
+    return 
 
 
 def extract_emission_features(sentence_tokens: List[Token], word_index: int, tag: str, feature_indexer: Indexer, add_to_indexer: bool):
