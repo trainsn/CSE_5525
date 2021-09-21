@@ -8,6 +8,7 @@ from collections import Counter
 from typing import List
 
 import numpy as np
+import pandas as pd
 from scipy.sparse import csr_matrix
 import pdb
 
@@ -196,6 +197,9 @@ def train_crf_model(sentences):
                 feature_cache[sentence_idx][word_idx][tag_idx] = extract_emission_features(
                     sentences[sentence_idx].tokens, word_idx, tag_indexer.get_object(tag_idx), feature_indexer, add_to_indexer=True)
 
+    print("use heuristic transition weights")
+    phi_ts = read_phi_ts(tag_indexer)
+
     print("Training")
     crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
     for epoch in range(1):
@@ -219,6 +223,10 @@ def train_crf_model(sentences):
                 feat = csr_matrix((data, (row, col)), shape=(1, len(feature_indexer)))
                 phi_e = feat.dot(np.expand_dims(crf.feature_weights, axis=1))
                 forward_backward(crf.feature_weights, feats_loc, len(feature_indexer), word_idx)
+
+def read_phi_ts(tag_indexer):
+    df = pd.read_csv("transition.csv", index_col=0)
+    return df.to_numpy()
 
 def forward_backward(feature_weights, feats_loc, feat_shape, time_length):
     num_words = feats_loc.shape[0]
