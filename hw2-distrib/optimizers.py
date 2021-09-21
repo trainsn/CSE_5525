@@ -178,3 +178,23 @@ class UnregularizedAdagradTrainer(Optimizer):
 
     def get_final_weights(self):
         return self.weights
+
+class Adam():
+    def __init__(self, init_weights, learning_rate=1e-2, beta1=0.9, beta2=0.999, epsilon=1e-8):
+        self.weights = init_weights
+        self.lr = learning_rate
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        self.m = np.zeros_like(self.weights)
+        self.v = np.zeros_like(self.weights)
+        self.t = 0
+
+    def apply_gradient_update(self, gradient):
+        self.m = self.beta1 * self.m + ((1-self.beta1) * gradient.toarray())[0]
+        self.v = self.beta2 * self.v + ((1-self.beta2) * gradient.multiply(gradient).toarray())[0]
+        self.t = self.t + 1
+        mb = self.m / (1 - self.beta1 ** self.t)    # scalar
+        vb = self.v / (1 - self.beta2 ** self.t)    # scalar
+        self.weights = self.weights + self.lr * mb / (np.sqrt(vb) + self.epsilon)
+

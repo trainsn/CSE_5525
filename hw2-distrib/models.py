@@ -202,48 +202,65 @@ def train_crf_model(sentences):
                     sentences[sentence_idx].tokens, word_idx, tag_indexer.get_object(tag_idx), feature_indexer, add_to_indexer=True)
 
     print("use heuristic transition weights")
-    phi_ts = read_phi_ts(tag_indexer)
+    phi_ts = read_phi_ts()
 
     print("Training")
     crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
-    for epoch in range(1):
-        sentence_indices = np.arange(1, 3)
+    optimizer = Adam(crf.feature_weights)
+    for epoch in range(1000):
+        sentence_indices = np.arange(3)
         # np.random.shuffle(sentence_indices)
+        num_iterations = 0
+        log_likelihood_sum = 0.
         for sentence_idx in sentence_indices:
             sentence = sentences[sentence_idx]
             labels = sentence.get_bio_tags()
             word_indices = np.arange(len(sentence))
-            # np.random.shuffle(word_indices)
             feats_loc = np.zeros((len(word_indices), len(tag_indexer), len(feature_cache[0][0][0])), dtype=np.int)
             for word_idx in word_indices:
                 for tag_idx in range(0, len(tag_indexer)):
                     feats_loc[word_idx][tag_idx] = feature_cache[sentence_idx][word_idx][tag_idx]
-            forward_backward(crf.feature_weights, feats_loc, len(feature_indexer), phi_ts)
+
+            num_words = feats_loc.shape[0]
+            num_tags = feats_loc.shape[1]
+            num_feats = feats_loc.shape[2]
+            feat_shape = len(feature_indexer)
+            col = feats_loc.flatten()
+            row = np.tile(np.arange(num_words * num_tags)[:, np.newaxis], (1, num_feats)).flatten()
+            data = np.ones(len(col), dtype=np.int)
+            feats = csr_matrix((data, (row, col)), shape=(num_words * num_tags, feat_shape))
+            phi_es = feats.dot(np.expand_dims(optimizer.weights, axis=1)).reshape(num_words, num_tags)
+
+            alpha, beta, denominator, pyx = forward_backward(phi_es, num_words, num_tags, phi_ts)
+            log_likelihood = 0.
+            gradient = csr_matrix((1, len(feature_indexer)))
             for word_idx in word_indices:
                 tag = labels[word_idx]
                 tag_idx = tag_indexer.index_of(tag)
-                col = feats_loc[word_idx][tag_idx]
-                row = np.zeros(len(col), dtype=np.int)
-                data = np.ones(len(col), dtype=np.int)
-                feat = csr_matrix((data, (row, col)), shape=(1, len(feature_indexer)))
-                phi_e = feat.dot(np.expand_dims(crf.feature_weights, axis=1))   # scalar
+                phi_e = phi_es[word_idx, tag_idx]   # scalar
+                log_likelihood += phi_e - denominator[0]
+
+                gradient += feats[word_idx * num_tags + tag_idx]
+                expect = (feats.transpose().dot(pyx.reshape((num_words * num_tags), 1))).T
+                gradient -= csr_matrix(expect)
+            optimizer.apply_gradient_update(gradient)
+            log_likelihood_sum += log_likelihood
+            num_iterations += 1
+            if num_iterations % 100 == 0:
+                print("Train Epoch: {} [{}/{} ({:.0f}%)]\tlog likelihood: {:.6f}".format(
+                    epoch, num_iterations, len(sentence_indices), 100. * num_iterations / len(sentence_indices),
+                    log_likelihood))
+
+        print("====> Epoch: {} Average log likelihood: {:.4f}".format(
+            epoch, log_likelihood_sum / len(sentence_indices)))
 
 
 
-def read_phi_ts(tag_indexer):
+def read_phi_ts():
     df = pd.read_csv("transition.csv", index_col=0)
     return df.to_numpy()
 
-def forward_backward(feature_weights, feats_loc, feat_shape, phi_ts):
-    num_words = feats_loc.shape[0]
-    num_tags = feats_loc.shape[1]
-    num_feats = feats_loc.shape[2]
-    col = feats_loc.flatten()
-    row = np.tile(np.arange(num_words * num_tags)[:, np.newaxis], (1, num_feats)).flatten()
-    data = np.ones(len(col), dtype=np.int)
-    feats = csr_matrix((data, (row, col)), shape=(num_words * num_tags, feat_shape))
-    phi_es = feats.dot(np.expand_dims(feature_weights, axis=1)).reshape(num_words, num_tags)
-
+def forward_backward(phi_es, num_words, num_tags, phi_ts):
     alpha = np.zeros((num_words, num_tags))
     alpha[0] = phi_es[0]
     for t in range(1, num_words):
@@ -259,8 +276,9 @@ def forward_backward(feature_weights, feats_loc, feat_shape, phi_ts):
         beta[t] = logsumexp(tmp, axis=1)   # [num_tags(t)]
 
     denominator = logsumexp(alpha + beta, axis=1)   # [num_words]
-    log_pyx = alpha + beta - denominator[:, np.newaxis]
-    return log_pyx
+    assert(abs(denominator - denominator[0]).sum() < 1e-4)
+    pyx = np.exp(alpha + beta - denominator[:, np.newaxis])     # [num_words, num_tags]
+    return alpha, beta, denominator, pyx
 
 
 def extract_emission_features(sentence_tokens: List[Token], word_index: int, tag: str, feature_indexer: Indexer, add_to_indexer: bool):
