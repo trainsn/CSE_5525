@@ -193,7 +193,7 @@ def train_crf_model(sentences):
             ] for i in range(0, len(sentences))
         ]
     # for sentence_idx in range(0, len(sentences)):
-    for sentence_idx in range(0, 2):
+    for sentence_idx in range(0, 3):
         if sentence_idx % 100 == 0:
             print("Ex %i/%i" % (sentence_idx, len(sentences)))
         for word_idx in range(0, len(sentences[sentence_idx])):
@@ -207,7 +207,7 @@ def train_crf_model(sentences):
     print("Training")
     crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
     for epoch in range(1):
-        sentence_indices = np.arange(1, 2)
+        sentence_indices = np.arange(1, 3)
         # np.random.shuffle(sentence_indices)
         for sentence_idx in sentence_indices:
             sentence = sentences[sentence_idx]
@@ -226,7 +226,7 @@ def train_crf_model(sentences):
                 row = np.zeros(len(col), dtype=np.int)
                 data = np.ones(len(col), dtype=np.int)
                 feat = csr_matrix((data, (row, col)), shape=(1, len(feature_indexer)))
-                phi_e = feat.dot(np.expand_dims(crf.feature_weights, axis=1))
+                phi_e = feat.dot(np.expand_dims(crf.feature_weights, axis=1))   # scalar
 
 
 
@@ -247,7 +247,7 @@ def forward_backward(feature_weights, feats_loc, feat_shape, phi_ts):
     alpha = np.zeros((num_words, num_tags))
     alpha[0] = phi_es[0]
     for t in range(1, num_words):
-        tmp = alpha[t - 1] + phi_ts  # [num_tags(t-1), num_tags(t)]
+        tmp = alpha[t - 1][:, np.newaxis] + phi_ts  # [num_tags(t-1), num_tags(t)]
         tmp = logsumexp(tmp, axis=0)  # [num_tags(t)]
         alpha[t] = tmp + phi_es[t]  # [num_tags(t)]
 
@@ -259,7 +259,8 @@ def forward_backward(feature_weights, feats_loc, feat_shape, phi_ts):
         beta[t] = logsumexp(tmp, axis=1)   # [num_tags(t)]
 
     denominator = logsumexp(alpha + beta, axis=1)   # [num_words]
-    return alpha, beta, denominator
+    log_pyx = alpha + beta - denominator[:, np.newaxis]
+    return log_pyx
 
 
 def extract_emission_features(sentence_tokens: List[Token], word_index: int, tag: str, feature_indexer: Indexer, add_to_indexer: bool):
