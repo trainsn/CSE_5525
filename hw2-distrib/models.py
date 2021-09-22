@@ -172,8 +172,52 @@ class CrfNerModel(object):
         self.feature_weights = feature_weights
 
     def decode(self, sentence_tokens):
-        raise Exception("IMPLEMENT ME")
+        num_words = len(sentence_tokens)
+        feature_cache = \
+        [
+            [
+                [] for j in range(0, len(self.tag_indexer))
+            ] for i in range(0, len(sentence_tokens))
+        ]
 
+        for word_idx in range(0, len(sentence_tokens)):
+            for tag_idx in range(0, len(self.tag_indexer)):
+                feature_cache[word_idx][tag_idx] = extract_emission_features(
+                    sentence_tokens, word_idx, self.tag_indexer.get_object(tag_idx), self.feature_indexer, add_to_indexer=False)
+
+        col = []
+        row = []
+        num_tags = len(feature_cache[0])
+        for word_idx in range(0, num_words):
+            for tag_idx in range(0, num_tags):
+                row.extend([word_idx * num_tags + tag_idx for i in range(0, len(feature_cache[word_idx][tag_idx]))])
+                col.extend(feature_cache[word_idx][tag_idx])
+        row = np.array(row)
+        col = np.array(col)
+        feat_shape = len(self.feature_indexer)
+        data = np.ones(len(col), dtype=np.int)
+        feats = csr_matrix((data, (row, col)), shape=(num_words * num_tags, feat_shape))
+        phi_es = feats.dot(np.expand_dims(self.feature_weights, axis=1)).reshape(num_words, num_tags)
+
+        phi_ts = read_phi_ts()
+
+        v = phi_es[0]
+        N = len(self.tag_indexer)
+        bps = np.zeros((num_words - 1, N), dtype=np.int)
+        for word_idx in range(1, num_words):
+            v_old = v[:, np.newaxis]    # [num_tags, 1]
+            tmp = v_old + phi_ts    # [num_tags, num_tags]
+            tmp = tmp + phi_es[word_idx][np.newaxis, :]     # [num_tags, num_tags]
+            v = np.max(tmp, axis=0)
+            bps[word_idx - 1] = np.argmax(tmp, axis=0)
+
+        pred_tags_idx = [np.argmax(v)]
+        for word_idx in range(num_words - 2, -1, -1):
+            last = pred_tags_idx[-1]
+            pred_tags_idx.append(bps[word_idx, last])
+        pred_tags_idx.reverse()
+        pred_tags = [self.tag_indexer.get_object(idx) for idx in pred_tags_idx]
+        return LabeledSentence(sentence_tokens, chunks_from_bio_tag_seq(pred_tags))
 
 # Trains a CrfNerModel on the given corpus of sentences.
 def train_crf_model(sentences):
@@ -192,9 +236,9 @@ def train_crf_model(sentences):
                 ] for j in range(0, len(sentences[i]))
             ] for i in range(0, len(sentences))
         ]
-    # for sentence_idx in range(0, len(sentences)):
-    for sentence_idx in range(0, 3):
-        if sentence_idx % 100 == 0:
+    for sentence_idx in range(0, len(sentences)):
+    # for sentence_idx in range(10):
+        if sentence_idx % 1000 == 0:
             print("Ex %i/%i" % (sentence_idx, len(sentences)))
         for word_idx in range(0, len(sentences[sentence_idx])):
             for tag_idx in range(0, len(tag_indexer)):
@@ -207,20 +251,21 @@ def train_crf_model(sentences):
     print("Training")
     crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
     optimizer = Adam(crf.feature_weights)
-    for epoch in range(1000):
-        sentence_indices = np.arange(3)
-        # np.random.shuffle(sentence_indices)
+    for epoch in range(10):
+        sentence_indices = np.arange(len(sentences))
+        # sentence_indices = np.arange(10)
+        np.random.shuffle(sentence_indices)
         num_iterations = 0
         log_likelihood_sum = 0.
         for sentence_idx in sentence_indices:
             sentence = sentences[sentence_idx]
             labels = sentence.get_bio_tags()
             word_indices = np.arange(len(sentence))
-            feats_loc = np.zeros((len(word_indices), len(tag_indexer), len(feature_cache[0][0][0])), dtype=np.int)
+            feats_loc = np.zeros((len(word_indices), len(tag_indexer), len(feature_cache[1][0][0])), dtype=np.int)
             for word_idx in word_indices:
                 for tag_idx in range(0, len(tag_indexer)):
                     feats_loc[word_idx][tag_idx] = feature_cache[sentence_idx][word_idx][tag_idx]
-
+    
             num_words = feats_loc.shape[0]
             num_tags = feats_loc.shape[1]
             num_feats = feats_loc.shape[2]
@@ -230,7 +275,7 @@ def train_crf_model(sentences):
             data = np.ones(len(col), dtype=np.int)
             feats = csr_matrix((data, (row, col)), shape=(num_words * num_tags, feat_shape))
             phi_es = feats.dot(np.expand_dims(optimizer.weights, axis=1)).reshape(num_words, num_tags)
-
+    
             alpha, beta, denominator, pyx = forward_backward(phi_es, num_words, num_tags, phi_ts)
             log_likelihood = 0.
             gradient = csr_matrix((1, len(feature_indexer)))
@@ -238,27 +283,39 @@ def train_crf_model(sentences):
                 tag = labels[word_idx]
                 tag_idx = tag_indexer.index_of(tag)
                 phi_e = phi_es[word_idx, tag_idx]   # scalar
-                log_likelihood += phi_e - denominator[0]
-
+                if word_idx > 0:
+                    last_tag = labels[word_idx - 1]
+                    last_tag_idx = tag_indexer.index_of(last_tag)
+                    log_likelihood += phi_ts[last_tag_idx, tag_idx]
+                log_likelihood += phi_e
+    
                 gradient += feats[word_idx * num_tags + tag_idx]
-                expect = (feats.transpose().dot(pyx.reshape((num_words * num_tags), 1))).T
-                gradient -= csr_matrix(expect)
+            expect = (feats.transpose().dot(pyx.reshape((num_words * num_tags), 1))).T
+            gradient -= csr_matrix(expect)
             optimizer.apply_gradient_update(gradient)
+            log_likelihood -= denominator[0]
             log_likelihood_sum += log_likelihood
-            num_iterations += 1
-            if num_iterations % 100 == 0:
+            if num_iterations % 400 == 0:
                 print("Train Epoch: {} [{}/{} ({:.0f}%)]\tlog likelihood: {:.6f}".format(
                     epoch, num_iterations, len(sentence_indices), 100. * num_iterations / len(sentence_indices),
                     log_likelihood))
-
+            num_iterations += 1
+    
         print("====> Epoch: {} Average log likelihood: {:.4f}".format(
             epoch, log_likelihood_sum / len(sentence_indices)))
-
-
+    
+        if (epoch + 1) % 1 == 0:
+            print("=> saving checkpoint at epoch {}".format(epoch + 1))
+            np.save("model_" + str(epoch + 1), optimizer.weights)
+    crf.feature_weights = optimizer.weights
+    # crf.feature_weights = np.load("model_10.npy")
+    return crf
 
 def read_phi_ts():
     df = pd.read_csv("transition.csv", index_col=0)
-    return df.to_numpy()
+    phi_ts = df.to_numpy()
+    phi_ts = phi_ts - logsumexp(phi_ts, axis=1)
+    return phi_ts
 
 def forward_backward(phi_es, num_words, num_tags, phi_ts):
     alpha = np.zeros((num_words, num_tags))

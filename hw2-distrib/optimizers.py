@@ -179,8 +179,20 @@ class UnregularizedAdagradTrainer(Optimizer):
     def get_final_weights(self):
         return self.weights
 
+class Adagrad():
+    def __init__(self, init_weights, learning_rate=1e0, epsilon=1.):
+        self.weights = init_weights
+        self.lr = learning_rate
+        self.cache = np.zeros_like(self.weights)
+        self.epsilon = epsilon
+
+    def apply_gradient_update(self, gradient):
+        self.cache += gradient.multiply(gradient).toarray()[0]
+        Ht = self.epsilon + np.sqrt(self.cache)
+        self.weights += self.lr * gradient.toarray()[0] / Ht
+
 class Adam():
-    def __init__(self, init_weights, learning_rate=1e-2, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    def __init__(self, init_weights, learning_rate=1e-1, beta1=0.9, beta2=0.999, epsilon=1e-8):
         self.weights = init_weights
         self.lr = learning_rate
         self.beta1 = beta1
