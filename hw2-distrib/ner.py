@@ -89,6 +89,7 @@ if __name__ == '__main__':
         dev_decoded = [bad_model.decode(test_ex.tokens) for test_ex in dev]
     elif system_to_run == "HMM":
         hmm_model = train_hmm_model(train)
+        print("Data reading and training took %f seconds" % (time.time() - start_time))
         dev_decoded = [hmm_model.decode(test_ex.tokens) for test_ex in dev]
     elif system_to_run == "CRF":
         crf_model = train_crf_model(train)

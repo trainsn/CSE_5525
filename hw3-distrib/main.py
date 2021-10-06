@@ -139,7 +139,7 @@ def encode_input_for_decoder(x_tensor, inp_lens_tensor, model_input_emb: Embeddi
     input_emb = model_input_emb.forward(x_tensor)
     (enc_output_each_word, enc_context_mask, enc_final_states) = model_enc.forward(input_emb, inp_lens_tensor)
     enc_final_states_reshaped = (enc_final_states[0].unsqueeze(0), enc_final_states[1].unsqueeze(0))
-    return (enc_output_each_word, enc_context_mask, enc_final_states_reshaped)
+    return enc_output_each_word, enc_context_mask, enc_final_states_reshaped
 
 
 def train_model_encdec(train_data: List[Example], test_data: List[Example], input_indexer, output_indexer, args) -> Seq2SeqSemanticParser:
@@ -226,5 +226,3 @@ if __name__ == '__main__':
         decoder = train_model_encdec(train_data_indexed, dev_data_indexed, input_indexer, output_indexer, args)
     print("=======FINAL EVALUATION ON BLIND TEST=======")
     evaluate(test_data_indexed, decoder, print_output=False, outfile="geo_test_output.tsv")
-
-

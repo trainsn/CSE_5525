@@ -114,4 +114,4 @@ class RNNEncoder(nn.Module):
         else:
             h, c = hn[0][0], hn[1][0]
             h_t = (h, c)
-        return (output, context_mask, h_t)
+        return output, context_mask, h_t

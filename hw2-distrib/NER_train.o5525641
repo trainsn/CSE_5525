@@ -1,0 +1,71 @@
+Namespace(blind_test_path='data/eng.testb.blind', dev_path='data/eng.testa', model='CRF', run_on_test=False, test_output_path='eng.testb.out', train_path='data/eng.train')
+Extracting features
+Ex 0/14987
+Ex 1000/14987
+Ex 2000/14987
+Ex 3000/14987
+Ex 4000/14987
+Ex 5000/14987
+Ex 6000/14987
+Ex 7000/14987
+Ex 8000/14987
+Ex 9000/14987
+Ex 10000/14987
+Ex 11000/14987
+Ex 12000/14987
+Ex 13000/14987
+Ex 14000/14987
+use heuristic transition weights
+Training
+Train Epoch: 0 [0/14987 (0%)]	log likelihood: -46.624390
+Train Epoch: 0 [400/14987 (3%)]	log likelihood: -0.000003
+Train Epoch: 0 [800/14987 (5%)]	log likelihood: -0.012606
+Train Epoch: 0 [1200/14987 (8%)]	log likelihood: -5.972065
+Train Epoch: 0 [1600/14987 (11%)]	log likelihood: -0.000000
+Train Epoch: 0 [2000/14987 (13%)]	log likelihood: -34.446988
+Train Epoch: 0 [2400/14987 (16%)]	log likelihood: -0.000000
+Train Epoch: 0 [2800/14987 (19%)]	log likelihood: -0.000001
+Train Epoch: 0 [3200/14987 (21%)]	log likelihood: -8.287159
+Train Epoch: 0 [3600/14987 (24%)]	log likelihood: -0.289865
+Train Epoch: 0 [4000/14987 (27%)]	log likelihood: -18.496367
+Train Epoch: 0 [4400/14987 (29%)]	log likelihood: -0.000036
+Train Epoch: 0 [4800/14987 (32%)]	log likelihood: -3.214572
+Train Epoch: 0 [5200/14987 (35%)]	log likelihood: -0.032197
+Train Epoch: 0 [5600/14987 (37%)]	log likelihood: -0.000013
+Train Epoch: 0 [6000/14987 (40%)]	log likelihood: -0.000000
+Train Epoch: 0 [6400/14987 (43%)]	log likelihood: -0.000000
+Train Epoch: 0 [6800/14987 (45%)]	log likelihood: -0.000000
+Train Epoch: 0 [7200/14987 (48%)]	log likelihood: -0.000000
+Train Epoch: 0 [7600/14987 (51%)]	log likelihood: -5.684247
+Train Epoch: 0 [8000/14987 (53%)]	log likelihood: 0.000000
+Train Epoch: 0 [8400/14987 (56%)]	log likelihood: -0.000000
+Train Epoch: 0 [8800/14987 (59%)]	log likelihood: -0.000000
+Train Epoch: 0 [9200/14987 (61%)]	log likelihood: -0.000000
+Train Epoch: 0 [9600/14987 (64%)]	log likelihood: -21.558711
+Train Epoch: 0 [10000/14987 (67%)]	log likelihood: -12.361673
+Train Epoch: 0 [10400/14987 (69%)]	log likelihood: -0.001005
+Train Epoch: 0 [10800/14987 (72%)]	log likelihood: -0.000000
+Train Epoch: 0 [11200/14987 (75%)]	log likelihood: -0.000000
+Train Epoch: 0 [11600/14987 (77%)]	log likelihood: -0.000279
+Train Epoch: 0 [12000/14987 (80%)]	log likelihood: 0.000000
+Train Epoch: 0 [12400/14987 (83%)]	log likelihood: 0.000000
+Train Epoch: 0 [12800/14987 (85%)]	log likelihood: -0.000004
+Train Epoch: 0 [13200/14987 (88%)]	log likelihood: -13.166635
+Train Epoch: 0 [13600/14987 (91%)]	log likelihood: -0.000005
+Train Epoch: 0 [14000/14987 (93%)]	log likelihood: 0.000000
+Train Epoch: 0 [14400/14987 (96%)]	log likelihood: -0.000000
+Train Epoch: 0 [14800/14987 (99%)]	log likelihood: -9.761011
+====> Epoch: 0 Average log likelihood: -2.5671
+=> saving checkpoint at epoch 1
+Data reading and training took 144.307867 seconds
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-LOC', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-MISC', 'I-MISC', 'O', 'O', 'O', 'B-LOC', 'O', 'B-LOC', 'I-LOC', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-MISC', 'I-MISC', 'O', 'O', 'O', 'B-LOC', 'O', 'B-LOC', 'I-LOC', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-LOC', 'I-LOC', 'O', 'B-PER', 'I-PER', 'O', 'O', 'O', 'B-LOC', 'O', 'O', 'O', 'B-ORG', 'O', 'O', 'O', 'B-LOC', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-LOC', 'I-LOC', 'O', 'B-PER', 'I-PER', 'O', 'O', 'O', 'B-LOC', 'O', 'O', 'O', 'B-ORG', 'O', 'O', 'O', 'B-LOC', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-LOC', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'B-PER', 'I-PER', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-ORG', 'O', 'B-ORG', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-LOC', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-ORG', 'I-ORG', 'O', 'O', 'O', 'O', 'O', 'O', 'B-PER', 'I-PER', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+WARNING: invalid tag sequence (I after O); ignoring the I: ['I-ORG', 'I-ORG', 'O', 'O', 'O', 'O', 'O', 'O', 'B-PER', 'I-PER', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O']
+Labeled F1: 77.45, precision: 4564/5842 = 78.12, recall: 4564/5943 = 76.80
