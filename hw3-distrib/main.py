@@ -213,7 +213,8 @@ if __name__ == '__main__':
 
     train, dev, test = load_datasets(args.train_path, args.dev_path, args.test_path, domain=args.domain)
     train_data_indexed, dev_data_indexed, test_data_indexed, input_indexer, output_indexer = index_datasets(train, dev, test, args.decoder_len_limit)
-    print("%i train exs, %i dev exs, %i input types, %i output types" % (len(train_data_indexed), len(dev_data_indexed), len(input_indexer), len(output_indexer)))
+    print("%i train exs, %i dev exs, %i input types, %i output types" %
+          (len(train_data_indexed), len(dev_data_indexed), len(input_indexer), len(output_indexer)))
     print("Input indexer: %s" % input_indexer)
     print("Output indexer: %s" % output_indexer)
     print("Here are some examples post tokenization and indexing:")
