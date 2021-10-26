@@ -118,21 +118,21 @@ class RNNEncoder(nn.Module):
 
 class RNNDecoder(nn.Module):
     def __init__(self, output_size, emb_size, hidden_size):
-        super.__init__()
+        super(RNNDecoder, self).__init__()
 
         self.output_size = output_size
         self.emb_size = emb_size
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(output_size, emb_size)
-        self.rnn = nn.LSTM(emb_size, hidden_size, n_layers=1, dropout=0)
+        self.rnn = nn.LSTM(emb_size, hidden_size, num_layers=1, dropout=0)
         self.out = nn.Linear(hidden_size, output_size)
 
-    def forward(self, input, h_0, c_0):
+    def forward(self, input, hidden, cell):
         input = input.unsqueeze(0)
 
         embeded = self.embedding(input)
-        output, (hidden, cell) = self.rnn(embeded, (h_0, c_0))
+        output, (hidden, cell) = self.rnn(embeded, (hidden, cell))
         pred = self.out(output.squeeze(0))
 
         return pred, hidden, cell

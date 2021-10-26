@@ -1,4 +1,5 @@
 import argparse
+import pdb
 import random
 import numpy as np
 import time
@@ -31,7 +32,11 @@ def _parse_args():
     parser.add_argument('--seed', type=int, default=0, help='RNG seed (default = 0)')
     parser.add_argument('--epochs', type=int, default=100, help='num epochs to train for')
     parser.add_argument('--lr', type=float, default=.001)
-    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
+    # parser.add_argument('--batch_size', type=int, default=2, help='batch size')
+    parser.add_argument("--log-every", type=int, default=40,
+                        help="log training status every given given number of epochs (default: 10)")
+    parser.add_argument("--check-every", type=int, default=5,
+                        help="save checkpoint every given number of epochs ")
     # 65 is all you need for GeoQuery
     parser.add_argument('--decoder_len_limit', type=int, default=65, help='output length limit of the decoder')
 
@@ -171,7 +176,92 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
 
     # First create a model. Then loop over epochs, loop over examples, and given some indexed words, call
     # the encoder, call your decoder, accumulate losses, update parameters
-    raise Exception("Implement the rest of me to train your encoder-decoder model")
+    input_vocab_size = len(input_indexer)
+    output_vocab_size = len(output_indexer)
+
+    embedding_size = 300
+    hidden_size = 200
+    input_embedding_layer = EmbeddingLayer(embedding_size, input_vocab_size, 0)
+    encoder = RNNEncoder(embedding_size, hidden_size, False)
+    decoder = RNNDecoder(output_vocab_size, embedding_size, hidden_size)
+
+    input_embedding_layer.cuda()
+    encoder.cuda()
+    decoder.cuda()
+
+    def weights_init(m):
+        if isinstance(m, nn.Linear) or isinstance(m, nn.Embedding):
+            nn.init.orthogonal_(m.weight)
+        if isinstance(m, nn.Linear):
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        if isinstance(m, nn.LSTM):
+            nn.init.orthogonal_(m.weight_hh_l0)
+            nn.init.orthogonal_(m.weight_ih_l0)
+            nn.init.zeros_(m.bias_hh_l0)
+            nn.init.zeros_(m.bias_ih_l0)
+
+    input_embedding_layer.apply(weights_init)
+    encoder.apply(weights_init)
+    decoder.apply(weights_init)
+
+    optimizer = optim.Adam(list(input_embedding_layer.parameters()) + list(encoder.parameters()) + list(decoder.parameters()),
+                           lr=args.lr, betas=(0.9, 0.999))
+    CE = nn.CrossEntropyLoss().cuda()
+
+    print("SOS index : ", output_indexer.index_of("<SOS>"))
+    for epoch in range(args.epochs):
+        indices = np.arange(len(all_train_input_data))
+        np.random.shuffle(indices)
+        num_iterations = 0
+        loss_sum = 0.
+
+        for idx in indices:
+            optimizer.zero_grad()
+            input_batch = all_train_input_data[idx:idx+1]
+            output_batch = all_train_output_data[idx:idx+1]
+            inp_lens = np.sum(input_batch != 0, axis=1)
+
+            x_tensor = torch.from_numpy(input_batch).long().cuda()
+            inp_lens_tensor = torch.from_numpy(inp_lens).long()
+            out_tensor = torch.from_numpy(output_batch).long().cuda()
+
+            _, _, enc_output = encode_input_for_decoder(x_tensor, inp_lens_tensor, input_embedding_layer, encoder)
+            hidden, cell = enc_output
+
+            input = torch.ones(1).long().cuda()
+
+            for t in range(output_max_len):
+                output, hidden, cell = decoder(input, hidden, cell)
+                if t == 0:
+                    outputs = output.unsqueeze(0)
+                else:
+                    outputs = torch.cat((outputs, output.unsqueeze(0)), dim=0)
+                input = out_tensor[:, t]
+
+            outputs = outputs.transpose(0, 1)
+            outputs = outputs.reshape(-1, outputs.shape[-1])
+            out_tensor = out_tensor.reshape(-1)
+
+            loss = CE(outputs, out_tensor)
+            loss.backward()
+            optimizer.step()
+            loss_sum += loss.item()
+            if num_iterations % args.log_every == 0:
+                print("Train Epoch: {} [{}/{} ({:.0f}%)]\tloss: {:.6f}".format(
+                    epoch, num_iterations, len(indices), 100. * num_iterations / len(indices), loss))
+            num_iterations += 1
+        print("====> Epoch: {} Average loss: {:.4f}".format(
+            epoch, loss_sum / len(indices)))
+        # saving...
+        if (epoch + 1) % args.check_every == 0:
+            print("=> saving checkpoint at epoch {}".format(epoch + 1))
+            torch.save({"epoch": epoch + 1,
+                        "embedding_state_dict": input_embedding_layer.state_dict(),
+                        "encoder_state_dict": encoder.state_dict(),
+                        "decoder_state_dict": decoder.state_dict()
+                        },
+                       "model_" + str(epoch + 1) + ".pth.tar")
 
 
 def evaluate(test_data: List[Example], decoder, example_freq=50, print_output=True, outfile=None):
