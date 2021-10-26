@@ -180,7 +180,7 @@ class UnregularizedAdagradTrainer(Optimizer):
         return self.weights
 
 class Adagrad():
-    def __init__(self, init_weights, learning_rate=1e0, epsilon=1.):
+    def __init__(self, init_weights, learning_rate=1e-1, epsilon=1e-4):
         self.weights = init_weights
         self.lr = learning_rate
         self.cache = np.zeros_like(self.weights)

@@ -250,7 +250,8 @@ def train_crf_model(sentences):
 
     print("Training")
     crf = CrfNerModel(tag_indexer, feature_indexer, np.random.normal(size=len(feature_indexer)))
-    optimizer = Adam(crf.feature_weights)
+    # optimizer = Adam(crf.feature_weights)
+    optimizer = Adagrad(crf.feature_weights)
     for epoch in range(15):
         sentence_indices = np.arange(len(sentences))
         # sentence_indices = np.arange(10)
