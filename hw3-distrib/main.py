@@ -27,9 +27,13 @@ def _parse_args():
     parser.add_argument('--test_path', type=str, default='data/geo_test.tsv', help='path to blind test data')
     parser.add_argument('--test_output_path', type=str, default='geo_test_output.tsv', help='path to write blind test results')
     parser.add_argument('--domain', type=str, default='geo', help='domain (geo for geoquery)')
+    parser.add_argument("--resume", type=str, default="",
+                        help="path to the latest checkpoint (default: none)")
     
     # Some common arguments for your convenience
     parser.add_argument('--seed', type=int, default=0, help='RNG seed (default = 0)')
+    parser.add_argument("--start-epoch", type=int, default=0,
+                        help="start epoch number (default: 0)")
     parser.add_argument('--epochs', type=int, default=100, help='num epochs to train for')
     parser.add_argument('--lr', type=float, default=.001)
     # parser.add_argument('--batch_size', type=int, default=2, help='batch size')
@@ -205,12 +209,23 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
     encoder.apply(weights_init)
     decoder.apply(weights_init)
 
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print("=> loading checkpoint {}".format(args.resume))
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        args.start_epoch = checkpoint["epoch"]
+        input_embedding_layer.load_state_dict(checkpoint["embedding_state_dict"])
+        encoder.load_state_dict(checkpoint["encoder_state_dict"])
+        decoder.load_state_dict(checkpoint["decoder_state_dict"])
+        print("=> loaded checkpoint {} (epoch {})".format(args.resume, checkpoint["epoch"]))
+        del checkpoint
+
     optimizer = optim.Adam(list(input_embedding_layer.parameters()) + list(encoder.parameters()) + list(decoder.parameters()),
                            lr=args.lr, betas=(0.9, 0.999))
     CE = nn.CrossEntropyLoss().cuda()
 
     print("SOS index : ", output_indexer.index_of("<SOS>"))
-    for epoch in range(args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
         indices = np.arange(len(all_train_input_data))
         np.random.shuffle(indices)
         num_iterations = 0
