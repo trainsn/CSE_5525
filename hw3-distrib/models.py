@@ -131,7 +131,6 @@ class RNNDecoder(nn.Module):
 
         return pred, hidden, cell
 
-
 class AttentionDecoder(nn.Module):
     def __init__(self, output_size, embedding_size, hidden_size, bidirect):
         super(AttentionDecoder, self).__init__()
@@ -142,19 +141,32 @@ class AttentionDecoder(nn.Module):
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(output_size, embedding_size)
-        self.attention = nn.Linear(hidden_size, hidden_size)
-        self.rnn = nn.LSTM(embedding_size + hidden_size, hidden_size, num_layers=1, dropout=0, bidirectional=True)
+        self.attention = nn.Linear(2 * hidden_size, 2 * hidden_size)
+        self.rnn = nn.LSTM(embedding_size + hidden_size * 2, hidden_size, num_layers=1, dropout=0, bidirectional=self.bidirect)
 
-        self.out = nn.Linear(hidden_size * 2, output_size)
+        self.out = nn.Linear(hidden_size * 4, output_size)
 
-    def forward(self, input, hidden, cell, context, encoder_outputs):
+    def compute_attention(self, hidden, enc_output_all):
+        batch_size, hidden_size2 = hidden.size()
+        enc_len, batch_size, _ = enc_output_all.size()
+        enc_output_all = enc_output_all.reshape(enc_len * batch_size, -1)
+        tmp = self.attention(enc_output_all)   # [enc_len * batch_size, hidden_size2]
+        tmp = tmp.reshape((enc_len, batch_size, hidden_size2))
+        hidden = hidden.reshape((batch_size, 1, hidden_size2))
+        atten = torch.bmm(hidden, tmp.permute(1, 2, 0))    # [batch_size, 1, enc_len]
+        atten = F.softmax(atten, dim=2)
+        return atten
+
+    def forward(self, input, hidden, cell, context, enc_output_all):
         input = input.unsqueeze(0)
 
         embeded = self.embedding(input)
         rnn_input = torch.cat((embeded, context), 2)
         output, (hidden, cell) = self.rnn(rnn_input, (hidden, cell))
-        pdb.set_trace()
+        # output: [batch_size, 1, hidden_size2]
+        # enc_output_all: [enc_len, batch_size, hidden_size2]
+        atten = self.compute_attention(output[0], enc_output_all)   # [batch_size, 1, enc_len]
+        context = torch.bmm(atten, enc_output_all.transpose(0, 1))  # [batch_size, 1, hidden_size2]
+        pred = self.out(torch.cat((output, context), 2)[0])
 
-
-
-
+        return pred, hidden, cell, context
