@@ -110,16 +110,16 @@ class RNNEncoder(nn.Module):
         return output, context_mask, h_t
 
 class RNNDecoder(nn.Module):
-    def __init__(self, output_size, emb_size, hidden_size, bidirect):
+    def __init__(self, output_size, embedding_size, hidden_size, bidirect):
         super(RNNDecoder, self).__init__()
 
         self.bidirect = bidirect
         self.output_size = output_size
-        self.emb_size = emb_size
+        self.embedding_size = embedding_size
         self.hidden_size = hidden_size
 
-        self.embedding = nn.Embedding(output_size, emb_size)
-        self.rnn = nn.LSTM(emb_size, hidden_size, num_layers=1, dropout=0, bidirectional=self.bidirect)
+        self.embedding = nn.Embedding(output_size, embedding_size)
+        self.rnn = nn.LSTM(embedding_size, hidden_size, num_layers=1, dropout=0, bidirectional=self.bidirect)
         self.out = nn.Linear(hidden_size * 2, output_size)
 
     def forward(self, input, hidden, cell):
@@ -127,6 +127,34 @@ class RNNDecoder(nn.Module):
 
         embeded = self.embedding(input)
         output, (hidden, cell) = self.rnn(embeded, (hidden, cell))
-        pred = self.out(output.squeeze(0))
+        pred = self.out(output[0])
 
         return pred, hidden, cell
+
+
+class AttentionDecoder(nn.Module):
+    def __init__(self, output_size, embedding_size, hidden_size, bidirect):
+        super(AttentionDecoder, self).__init__()
+
+        self.bidirect = bidirect
+        self.output_size = output_size
+        self.embedding_size = embedding_size
+        self.hidden_size = hidden_size
+
+        self.embedding = nn.Embedding(output_size, embedding_size)
+        self.attention = nn.Linear(hidden_size, hidden_size)
+        self.rnn = nn.LSTM(embedding_size + hidden_size, hidden_size, num_layers=1, dropout=0, bidirectional=True)
+
+        self.out = nn.Linear(hidden_size * 2, output_size)
+
+    def forward(self, input, hidden, cell, context, encoder_outputs):
+        input = input.unsqueeze(0)
+
+        embeded = self.embedding(input)
+        rnn_input = torch.cat((embeded, context), 2)
+        output, (hidden, cell) = self.rnn(rnn_input, (hidden, cell))
+        pdb.set_trace()
+
+
+
+
