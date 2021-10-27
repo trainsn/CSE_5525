@@ -85,13 +85,40 @@ class NearestNeighborSemanticParser(object):
 
 
 class Seq2SeqSemanticParser(object):
-    def __init__(self):
-        raise Exception("implement me!")
-        # Add any args you need here
+    def __init__(self, output_max_len, input_embedding_layer, encoder, decoder, output_indexer):
+        self.input_embedding_layer = input_embedding_layer
+        self.encoder = encoder
+        self.decoder = decoder
+        self.output_indexer = output_indexer
+        self.output_max_len = output_max_len + 5
 
     def decode(self, test_data: List[Example]) -> List[List[Derivation]]:
-        raise Exception("implement me!")
+        ans = []
+        for i, ex in enumerate(test_data):
+            pred_tokens = []
+            input_batch = np.array([ex.x_indexed])
+            x_tensor = torch.from_numpy(input_batch).long().cuda()
+            inp_lens_tensor = torch.from_numpy(np.sum(input_batch != 0, axis=1)).long()
+            _, _, enc_output = encode_input_for_decoder(x_tensor, inp_lens_tensor, self.input_embedding_layer, self.encoder)
+            hidden, cell = enc_output
+            input = torch.ones(1).long().cuda()
+            token = "<SOS>"
+            cursor = 0
+            while True:
+                output, hidden, cell = self.decoder(input, hidden, cell)
+                input = output.argmax().unsqueeze(0)
+                token = output_indexer.get_object(input.item())
+                if token != "<EOS>" and cursor < self.output_max_len:
+                    pred_tokens.append(token)
+                else:
+                    break
+                cursor += 1
+            ans.append([Derivation(ex, 1.0, pred_tokens)])
 
+            if (i+1) % 100 == 0:
+                print("{}/{} done".format(i+1, len(test_data)))
+
+        return ans
 
 def make_padded_input_tensor(exs: List[Example], input_indexer: Indexer, max_len: int, reverse_input=False) -> np.ndarray:
     """
@@ -147,8 +174,7 @@ def encode_input_for_decoder(x_tensor, inp_lens_tensor, model_input_emb: Embeddi
     """
     input_emb = model_input_emb.forward(x_tensor)
     (enc_output_each_word, enc_context_mask, enc_final_states) = model_enc.forward(input_emb, inp_lens_tensor)
-    enc_final_states_reshaped = (enc_final_states[0].unsqueeze(0), enc_final_states[1].unsqueeze(0))
-    return enc_output_each_word, enc_context_mask, enc_final_states_reshaped
+    return enc_output_each_word, enc_context_mask, enc_final_states
 
 
 def train_model_encdec(train_data: List[Example], test_data: List[Example], input_indexer, output_indexer, args) -> Seq2SeqSemanticParser:
@@ -183,11 +209,11 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
     input_vocab_size = len(input_indexer)
     output_vocab_size = len(output_indexer)
 
-    embedding_size = 300
-    hidden_size = 200
+    embedding_size = 512
+    hidden_size = 512
     input_embedding_layer = EmbeddingLayer(embedding_size, input_vocab_size, 0)
-    encoder = RNNEncoder(embedding_size, hidden_size, False)
-    decoder = RNNDecoder(output_vocab_size, embedding_size, hidden_size)
+    encoder = RNNEncoder(embedding_size, hidden_size, bidirect=True)
+    decoder = RNNDecoder(output_vocab_size, embedding_size, hidden_size, bidirect=True)
 
     input_embedding_layer.cuda()
     encoder.cuda()
@@ -202,8 +228,14 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
         if isinstance(m, nn.LSTM):
             nn.init.orthogonal_(m.weight_hh_l0)
             nn.init.orthogonal_(m.weight_ih_l0)
+            if m.bidirectional:
+                nn.init.orthogonal_(m.weight_hh_l0_reverse)
+                nn.init.orthogonal_(m.weight_ih_l0_reverse)
             nn.init.zeros_(m.bias_hh_l0)
             nn.init.zeros_(m.bias_ih_l0)
+            if m.bidirectional:
+                nn.init.zeros_(m.bias_hh_l0_reverse)
+                nn.init.zeros_(m.bias_ih_l0_reverse)
 
     input_embedding_layer.apply(weights_init)
     encoder.apply(weights_init)
@@ -233,13 +265,10 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
 
         for idx in indices:
             optimizer.zero_grad()
-            input_batch = all_train_input_data[idx:idx+1]
-            output_batch = all_train_output_data[idx:idx+1]
-            inp_lens = np.sum(input_batch != 0, axis=1)
 
-            x_tensor = torch.from_numpy(input_batch).long().cuda()
-            inp_lens_tensor = torch.from_numpy(inp_lens).long()
-            out_tensor = torch.from_numpy(output_batch).long().cuda()
+            x_tensor = torch.from_numpy(all_train_input_data[idx:idx+1]).long().cuda()
+            inp_lens_tensor = torch.from_numpy(np.sum(all_train_input_data[idx:idx+1] != 0, axis=1)).long()
+            out_tensor = torch.from_numpy(all_train_output_data[idx:idx+1]).long().cuda()
 
             _, _, enc_output = encode_input_for_decoder(x_tensor, inp_lens_tensor, input_embedding_layer, encoder)
             hidden, cell = enc_output
@@ -277,7 +306,7 @@ def train_model_encdec(train_data: List[Example], test_data: List[Example], inpu
                         "decoder_state_dict": decoder.state_dict()
                         },
                        "model_" + str(epoch + 1) + ".pth.tar")
-
+    return Seq2SeqSemanticParser(output_max_len, input_embedding_layer, encoder, decoder, output_indexer)
 
 def evaluate(test_data: List[Example], decoder, example_freq=50, print_output=True, outfile=None):
     """
@@ -327,8 +356,9 @@ if __name__ == '__main__':
         print(train_data_indexed[i])
     if args.do_nearest_neighbor:
         decoder = NearestNeighborSemanticParser(train_data_indexed)
-        evaluate(dev_data_indexed, decoder)
     else:
         decoder = train_model_encdec(train_data_indexed, dev_data_indexed, input_indexer, output_indexer, args)
+    print("=======EVALUATION ON DEV SET=======")
+    evaluate(dev_data_indexed, decoder)
     print("=======FINAL EVALUATION ON BLIND TEST=======")
     evaluate(test_data_indexed, decoder, print_output=False, outfile="geo_test_output.tsv")

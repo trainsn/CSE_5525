@@ -1,3 +1,5 @@
+import pdb
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -52,8 +54,6 @@ class RNNEncoder(nn.Module):
         self.bidirect = bidirect
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.reduce_h_W = nn.Linear(hidden_size * 2, hidden_size, bias=True)
-        self.reduce_c_W = nn.Linear(hidden_size * 2, hidden_size, bias=True)
         self.rnn = nn.LSTM(input_size, hidden_size, num_layers=1, batch_first=True,
                                dropout=0., bidirectional=self.bidirect)
         self.init_weight()
@@ -103,30 +103,24 @@ class RNNEncoder(nn.Module):
         # Note: if you want multiple LSTM layers, you'll need to change this to consult the penultimate layer
         # or gather representations from all layers.
         if self.bidirect:
-            h, c = hn[0], hn[1]
-            # Grab the representations from forward and backward LSTMs
-            h_, c_ = torch.cat((h[0], h[1]), dim=1), torch.cat((c[0], c[1]), dim=1)
-            # Reduce them by multiplying by a weight matrix so that the hidden size sent to the decoder is the same
-            # as the hidden size in the encoder
-            new_h = self.reduce_h_W(h_)
-            new_c = self.reduce_c_W(c_)
-            h_t = (new_h, new_c)
+            h_t = hn
         else:
             h, c = hn[0][0], hn[1][0]
             h_t = (h, c)
         return output, context_mask, h_t
 
 class RNNDecoder(nn.Module):
-    def __init__(self, output_size, emb_size, hidden_size):
+    def __init__(self, output_size, emb_size, hidden_size, bidirect):
         super(RNNDecoder, self).__init__()
 
+        self.bidirect = bidirect
         self.output_size = output_size
         self.emb_size = emb_size
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(output_size, emb_size)
-        self.rnn = nn.LSTM(emb_size, hidden_size, num_layers=1, dropout=0)
-        self.out = nn.Linear(hidden_size, output_size)
+        self.rnn = nn.LSTM(emb_size, hidden_size, num_layers=1, dropout=0, bidirectional=self.bidirect)
+        self.out = nn.Linear(hidden_size * 2, output_size)
 
     def forward(self, input, hidden, cell):
         input = input.unsqueeze(0)
